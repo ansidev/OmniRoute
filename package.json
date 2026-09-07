@@ -461,7 +461,13 @@
     "@parcel/watcher": true,
     "keytar": true,
     "protobufjs": true,
-    "unrs-resolver": true
+    "unrs-resolver": true,
+    "fsevents": true,
+    "opencode-ai": true,
+    "bun": true,
+    "@playwright/browser-chromium": true,
+    "onnxruntime-node": true,
+    "libxmljs2": true
   },
   "overrides": {
     "browserslist": "^4.28.8",
