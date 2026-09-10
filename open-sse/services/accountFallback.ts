@@ -252,6 +252,12 @@ export const CREDITS_EXHAUSTED_SIGNALS = [
   // marked credits_exhausted and keeps being re-selected on every request.
   "insufficient credits",
   "insufficient credit",
+  // OMN-1: Charm Hyper's depleted-account 402 says "Insufficient Hypercredits" —
+  // "hyper" splits the "insufficient credit(s)" phrases above, so the body was
+  // only caught by the bare status_402 rule (no creditsExhausted flag) and, on
+  // this passthroughModels provider, drained accounts were locked out per-model
+  // instead of the connection going terminal credits_exhausted.
+  "insufficient hypercredits",
 ];
 
 // T11: Signals that indicate OAuth token is invalid/expired (not permanent deactivation)
