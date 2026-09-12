@@ -390,6 +390,7 @@ import { translateNonStreamingResponse } from "./responseTranslator.ts";
 import { extractToolSchemaMap } from "../translator/response/openai-responses/toolSchemas.ts";
 import { unwrapClineNonStreamingEnvelope } from "./chatCore/clineResponseEnvelope.ts";
 import { extractUsageFromResponse } from "./usageExtractor.ts";
+import { updateCharmHyperQuota } from "../services/charmHyperQuotaUpdater.ts";
 import {
   sanitizeOpenAIResponse,
   sanitizeResponsesApiResponse,
@@ -5024,6 +5025,8 @@ export async function handleChatCore({
     const usage = extractUsageFromResponse(responseBody, provider);
     if (usage && typeof usage === "object") {
       attachCompressionUsageReceiptAfterAnalytics(usage as Record<string, unknown>, "provider");
+      // Update hypercredit quota for charm-hyper provider
+      await updateCharmHyperQuota(provider, successConnectionId, responseBody.usage);
       // Track Gemini token consumption for TPM rate-limit pre-check
       if (provider === "gemini") {
         const promptTokens =
@@ -5686,6 +5689,8 @@ export async function handleChatCore({
     // Track cache token metrics for streaming responses
     if (streamUsage && typeof streamUsage === "object") {
       attachCompressionUsageReceiptAfterAnalytics(streamUsage as Record<string, unknown>, "stream");
+      // Update hypercredit quota for charm-hyper provider
+      await updateCharmHyperQuota(provider, streamConnectionId, streamResponseBody?.usage);
       // Track Gemini token consumption for TPM rate-limit pre-check
       if (provider === "gemini") {
         const promptTokens =
