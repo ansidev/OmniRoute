@@ -286,6 +286,7 @@ export async function registerQuotaFetchers(): Promise<void> {
     { registerOpenrouterQuotaFetcher },
     { registerOpencodeQuotaFetcher },
     { registerGrokWebQuotaFetcher },
+    { registerCharmHyperQuotaFetcher },
     { registerGenericQuotaFetchers },
   ] = await Promise.all([
     import("@omniroute/open-sse/services/codexQuotaFetcher"),
@@ -297,6 +298,7 @@ export async function registerQuotaFetchers(): Promise<void> {
     import("@omniroute/open-sse/services/openrouterQuotaFetcher"),
     import("@omniroute/open-sse/services/opencodeQuotaFetcher"),
     import("@omniroute/open-sse/services/grokQuotaFetcher"),
+    import("@omniroute/open-sse/services/charmHyperQuotaFetcher"),
     import("@omniroute/open-sse/services/genericQuotaFetcher"),
   ]);
 
@@ -306,6 +308,7 @@ export async function registerQuotaFetchers(): Promise<void> {
   registerCrofUsageFetcher();
   registerDeepseekQuotaFetcher();
   registerMoonshotQuotaFetcher();
+  registerCharmHyperQuotaFetcher();
   try {
     const { getProviderNodes } = await import("@/lib/db/providers");
     const nodes = await getProviderNodes();
