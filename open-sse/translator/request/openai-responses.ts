@@ -82,24 +82,30 @@ function appendReasoningContent(current: unknown, next: string): string {
 function normalizeRoleBasedToolCalls(toolCalls: unknown): JsonRecord[] {
   if (!Array.isArray(toolCalls)) return [];
 
-  return toolCalls
-    .map((toolCallValue) => {
-      const toolCall = toRecord(toolCallValue);
-      const fn = toRecord(toolCall.function);
-      const name = toString(fn.name).trim();
-      const id = toString(toolCall.id).trim();
-      if (!name || !id) return null;
-      return {
-        id,
-        type: "function",
-        function: {
-          name,
-          arguments:
-            typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
-        },
-      };
-    })
-    .filter((toolCall): toolCall is JsonRecord => toolCall !== null);
+  return (
+    toolCalls
+      .map((toolCallValue) => {
+        const toolCall = toRecord(toolCallValue);
+        const fn = toRecord(toolCall.function);
+        const name = toString(fn.name).trim();
+        const id = toString(toolCall.id).trim();
+        if (!name || !id) return null;
+        return {
+          id,
+          type: "function",
+          function: {
+            name,
+            arguments:
+              typeof fn.arguments === "string" ? fn.arguments : JSON.stringify(fn.arguments ?? {}),
+          },
+        };
+      })
+      // The mapped element is the tool-call object or null, which is NOT a
+      // Record<string, unknown> as far as the predicate rule is concerned (TS2677:
+      // the predicate type must be assignable to the parameter type). Narrow by the
+      // element's own type; the literal satisfies JsonRecord at the return.
+      .filter((toolCall): toolCall is NonNullable<typeof toolCall> => toolCall !== null)
+  );
 }
 
 /**
@@ -510,14 +516,16 @@ export function openaiResponsesToOpenAIRequest(
       continue;
     }
 
-    // Skip tool_search_call items. These are Responses-API-only metadata items
-    // emitted by Codex's dynamic tool-search optimization: they record that the
-    // model queried a subset of available tools, but carry no content that Chat
-    // Completions can represent. Throwing here would break every multi-turn
-    // conversation where Codex previously used tool_search (the whole session
-    // would carry tool_search_call items forward in `input`). Skipping matches
-    // the reasoning-item policy: display-only metadata, no chat side-effect.
-    if (itemType === "tool_search_call" || itemType === "tool_search_result") {
+    // Skip Responses-only search metadata. tool_search_call/tool_search_result
+    // are Codex's dynamic tool-discovery items; web_search_call is emitted by
+    // OmniRoute's web-search fallback alongside function_call_output, which
+    // already carries the result for Chat Completions. Replayed metadata has no
+    // lossless Chat representation and must not fail a follow-up turn.
+    if (
+      itemType === "tool_search_call" ||
+      itemType === "tool_search_result" ||
+      itemType === "web_search_call"
+    ) {
       continue;
     }
 
@@ -754,7 +762,10 @@ export function openaiResponsesToOpenAIRequest(
   ) {
     const tc = toRecord(result.tool_choice);
     const tcType = toString(tc.type);
-    if (tcType === "function" && tc.name !== undefined && !tc.function) {
+    // Custom/freeform tools are normalized to Chat function tools with an { input: string }
+    // schema above. Force the normalized function here while response-side custom-tool metadata
+    // restores custom_tool_call and raw input for the Responses client.
+    if ((tcType === "function" || tcType === "custom") && tc.name !== undefined && !tc.function) {
       result.tool_choice = { type: "function", function: { name: tc.name } };
     } else if (tcType === "local_shell") {
       result.tool_choice = { type: "function", function: { name: "shell" } };

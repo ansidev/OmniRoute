@@ -10,6 +10,7 @@ import {
 } from "../services/auth";
 import { maybeReactivateAfterExplicitProbe } from "../services/explicitInactiveProbe";
 import { connectionHasExtraKeys } from "@omniroute/open-sse/services/apiKeyRotator.ts";
+import { clearRequestRejectedStreak } from "@omniroute/open-sse/services/requestRejectedStreak.ts";
 import { createBuiltinAutoCombo } from "@omniroute/open-sse/services/autoCombo/builtinCatalog.ts";
 import * as log from "../utils/logger";
 import { updateProviderCredentials } from "../services/tokenRefresh";
@@ -349,6 +350,7 @@ export async function resolveModelOrError(
     customModelTargetFormat,
     extendedContext,
     apiFormat,
+    resolvedThinkingEffort: modelInfo.resolvedThinkingEffort,
   };
 }
 
@@ -443,6 +445,7 @@ export async function executeChatWithBreaker({
   extendedContext,
   modelApiFormat,
   modelTargetFormat,
+  resolvedThinkingEffort,
   providerProfile,
   cachedSettings,
   skipUpstreamRetry = false,
@@ -496,6 +499,7 @@ export async function executeChatWithBreaker({
               extendedContext,
               apiFormat: modelApiFormat,
               targetFormat: modelTargetFormat,
+              resolvedThinkingEffort,
             },
             credentials: refreshedCredentials,
             log: handlerLog,
@@ -537,6 +541,9 @@ export async function executeChatWithBreaker({
             },
             onRequestSuccess: async () => {
               if (isShadowTraffic) return;
+              // A healthy response ends any run of per-request refusals
+              // (#12859) — only a real success does, not an elapsed cooldown.
+              if (credentials.connectionId) clearRequestRejectedStreak(credentials.connectionId);
               await clearAccountError(credentials.connectionId, credentials);
               await maybeReactivateAfterExplicitProbe({
                 connectionId: credentials.connectionId,
@@ -991,7 +998,8 @@ export function decideProxyResolutionFailure(
 export async function safeResolveProxy(
   connectionId: string,
   apiKeyId?: string,
-  providerId?: string
+  providerId?: string,
+  comboName?: string | null
 ) {
   try {
     const resolved = await resolveProxyForConnection(connectionId, apiKeyId, providerId);
@@ -1001,7 +1009,7 @@ export async function safeResolveProxy(
     // opts back into direct). Explicit "proxy off" is not a leak (see the guard).
     if (
       !(resolved as { proxy?: unknown } | null)?.proxy &&
-      hasBlockingProxyAssignment(connectionId, providerId)
+      hasBlockingProxyAssignment(connectionId, providerId, comboName)
     ) {
       return decideProxyResolutionFailure(
         Object.assign(
