@@ -82,6 +82,7 @@ import {
   normalizeIntelligentRoutingConfig,
 } from "@/lib/combos/intelligentRouting";
 import { getComboStepTarget } from "@/lib/combos/steps";
+import { DEAD_COMBO_CONFIG_KEYS } from "@/lib/combos/deadConfigKeys";
 import { resolveServerErrorMessage } from "@/lib/api/serverErrorMessage";
 import { useTranslations } from "next-intl";
 
@@ -185,6 +186,11 @@ const STRATEGY_GUIDANCE_FALLBACK = {
     avoid: "Avoid when models have similar context lengths or simple tasks.",
     example: "Example: Distribute long conversations across models with large context windows.",
   },
+  "quota-weighted": {
+    when: "Use when several accounts of the same model have quota snapshots and concurrent traffic should land on accounts that still have leftover.",
+    avoid: "Avoid when most accounts have no quota snapshots.",
+    example: "Example: 10 Antigravity Gemini accounts with different 5h/weekly resets; skip empty ones and pick among the rest in proportion to leftover.",
+  },
 };
 
 const ADVANCED_FIELD_HELP_FALLBACK = {
@@ -212,23 +218,13 @@ const ADVANCED_FIELD_HELP_FALLBACK = {
     "What to do when the next combo target cannot accept the original reasoning transport. Drop is the default: it removes reasoning state and tries the target. Skip leaves the request body untouched and falls through.",
 };
 
-const LEGACY_COMBO_RESILIENCE_KEYS = new Set([
+// UI-only keys the modal manages itself (never persisted by this path):
+// timeoutMs, healthCheckEnabled, healthCheckTimeoutMs.
+const NON_PERSISTED_COMBO_CONFIG_KEYS = new Set([
+  ...DEAD_COMBO_CONFIG_KEYS,
   "timeoutMs",
   "healthCheckEnabled",
   "healthCheckTimeoutMs",
-  "queueTimeoutMs",
-  "queueDepth",
-  "fallbackDelayMs",
-  "handoffProviders",
-  "maxComboDepth",
-  "manifestRouting",
-  "complexityAwareRouting",
-  "pipeline_enabled",
-  "pipelineConcurrency",
-  "shadowRouting",
-  "evalRouting",
-  "resetAwareEnabled",
-  "resetAwareWindow",
 ]);
 const MS_PER_SECOND = 1000;
 
@@ -250,7 +246,7 @@ function sanitizeComboRuntimeConfig(config) {
   return Object.fromEntries(
     Object.entries(config).filter(
       ([key, value]) =>
-        value !== undefined && value !== null && !LEGACY_COMBO_RESILIENCE_KEYS.has(key)
+        value !== undefined && value !== null && !NON_PERSISTED_COMBO_CONFIG_KEYS.has(key)
     )
   );
 }
@@ -391,6 +387,15 @@ const STRATEGY_RECOMMENDATIONS_FALLBACK = {
       "Best for long conversations that span multiple requests.",
       "Selects models with appropriate context capacity automatically.",
       "Use when context limits are a bottleneck for your workload.",
+    ],
+  },
+  "quota-weighted": {
+    title: "Quota-weighted account spread",
+    description: "Drops exhausted accounts, keeps a 1% soft floor, then picks the first target in proportion to leftover divided by in-flight load. Existing conversations stay pinned.",
+    tips: [
+      "Keep session stickiness on (the default). New conversations spread by leftover and in-flight load; an existing conversation stays on its account until that account is empty, then rebinds.",
+      "Needs per-account quota snapshots. Missing snapshots stay eligible but only at the reset-aware missing-quota score (0.5).",
+      "The 1% floor is a last-resort pool. An empty A pool still serves B instead of returning 404.",
     ],
   },
 };
